@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pearl
+      POSTGRES_PASSWORD: pearl
+      POSTGRES_DB: pearl
+    ports:
+      - "5432:5432"
+    volumes:
+      - pearl_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pearl -d pearl"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://pearl:pearl@postgres:5432/pearl
+      JWT_SECRET: ${JWT_SECRET:-dev-pearl-docker-compose-secret-min-16}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      LEAD_REQUEST_LOG_PATH: ${LEAD_REQUEST_LOG_PATH:-logs/lead-requests.ndjson}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+volumes:
+  pearl_pg_data:
